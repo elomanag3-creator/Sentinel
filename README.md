@@ -1,4 +1,4 @@
-# sentinel
+# The Sentinel
 
 Lightweight host security monitor in one process and one SQLite database:
 
