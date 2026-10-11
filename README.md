@@ -77,5 +77,4 @@ Then add `"mycheck"` to `[audit] checks`. Use `cfg.path("/etc/x")` so it works o
 ## Roadmap
 API + dashboard -> multi-host agents and alerts (Slack/mail/webhook) -> CVE matching (OSV), SUID inventory, container audits, journald/JSON logs.
 
-## Migrating from the earlier `secaudit` / `logsentinel` prototypes
-Not automatic: the new database has a different schema. Start fresh with `sentinel audit` (old files can stay as an archive).
+
