@@ -1,0 +1,9 @@
+data/
+models/
+demo/
+tests/
+docs/
+.git/
+.github/
+__pycache__/
+*.egg-info/

@@ -1,0 +1,9 @@
+data/
+models/
+demo/
+sentinel.toml
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+.venv/

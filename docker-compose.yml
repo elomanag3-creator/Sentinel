@@ -1,0 +1,21 @@
+# Audits the HOST (not the container). Root inside the container + host mounted READ-ONLY at /host.
+# Nothing on the host is ever modified; results and the model live in the `sentinel-data` volume.
+services:
+  sentinel:
+    build: .
+    restart: unless-stopped
+    network_mode: host          # see the host's listening ports
+    pid: host                   # port -> process name
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - /:/host:ro
+      - sentinel-data:/data
+      - ./docker/sentinel.toml:/etc/sentinel/sentinel.toml:ro
+    environment:
+      SENTINEL_HOST_ROOT: /host
+    # command: ["daemon"]       # default. One-off commands: docker compose run --rm sentinel audit
+
+volumes:
+  sentinel-data:

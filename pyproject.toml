@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sentinel-monitor"          # PyPI name still to be verified; import name and command are `sentinel`
+version = "0.1.0"
+description = "Lightweight host security monitor: posture audits + explainable log anomaly detection"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }  # proposed - confirm, then add the LICENSE file
+dependencies = []                  # the audit half is pure standard library
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Topic :: System :: Monitoring",
+    "Topic :: Security",
+]
+
+[project.optional-dependencies]
+ml = ["numpy>=1.26", "scikit-learn>=1.4"]   # needed for train / detect and the detection part of the daemon
+dev = ["ruff"]
+
+[project.scripts]
+sentinel = "sentinel.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 120

@@ -1,0 +1,19 @@
+# Copy to sentinel.toml (or /etc/sentinel/sentinel.toml). Every key is optional.
+[general]
+db = "data/sentinel.db"
+host_root = "/"              # "/host" when running in Docker with the host mounted at /host
+
+[audit]
+checks = ["ports", "passwords", "packages", "permissions"]
+allow_ports = [22]           # ports you expect to be reachable from the network
+refresh_index = false        # run `apt-get update` (or equivalent) before the package check
+interval = 21600             # daemon: seconds between audits (6h)
+
+[detect]
+files = ["/var/log/auth.log"]   # empty list = detection disabled in the daemon
+window = 300                    # seconds per analysis window
+contamination = 0.01            # expected share of odd windows in the training data
+model = "models/model.npz"
+interval = 300                  # daemon: seconds between detection passes
+lookback_hours = 24
+novelty = true                  # also report never-seen log patterns
