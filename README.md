@@ -1,6 +1,8 @@
-# sentinel
+# The Sentinel
 
 Lightweight host security monitor in one process and one SQLite database:
+
+![Dashboard example](shot-overview.png)
 
 - **Audit** - posture checks: exposed ports, password/SSH policy, outdated packages, permissions on critical files.
 - **Detect** - unsupervised ML on your logs. Every anomaly explains *why* (`auth_failures high, z=+10.2, top IP 185.220.101.4`).
