@@ -17,3 +17,9 @@ model = "models/model.npz"
 interval = 300                  # daemon: seconds between detection passes
 lookback_hours = 24
 novelty = true                  # also report never-seen log patterns
+
+[api]                           # `sentinel serve`
+host = "127.0.0.1"              # anything else requires a token
+port = 8080
+token = ""                      # prefer the SENTINEL_API_TOKEN environment variable; a token enables POST actions
+actions = true                  # allow "run audit / detect / train" from the API and dashboard (needs a token)

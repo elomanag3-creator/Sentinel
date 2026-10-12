@@ -1,4 +1,7 @@
-import os, sqlite3, tempfile, unittest
+import os
+import sqlite3
+import tempfile
+import unittest
 
 from sentinel.config import ConfigError, load_settings
 from sentinel.db import MIGRATIONS, Database, migrate

@@ -4,7 +4,7 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /src
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install --no-cache-dir ".[ml]" && mkdir -p /data /etc/sentinel
+RUN pip install --no-cache-dir ".[ml,web]" && mkdir -p /data /etc/sentinel
 VOLUME /data
 # Runs as root on purpose: reading /etc/shadow and other root-only files is the point of the audit.
 ENTRYPOINT ["sentinel"]

@@ -1,7 +1,7 @@
 import logging
 import socket
 
-from ..db import Database, capture_logs
+from ..db import RUN_LOCK, Database, capture_logs
 from ..models import Finding
 from ..registry import load_checks
 
@@ -23,6 +23,11 @@ def run_audit(db: Database, settings, checks=None) -> int:
     if unknown:
         raise ValueError(f"unknown check(s): {', '.join(unknown)} (available: {', '.join(sorted(available))})")
     cfg = settings.audit_config()
+    with RUN_LOCK:
+        return _run(db, cfg, available, checks)
+
+
+def _run(db, cfg, available, checks) -> int:
     run_id = db.start_run("audit", hostname(cfg.host_root), cfg.host_root, checks)
     with capture_logs(db, run_id):
         log.info("audit started (checks=%s, host_root=%s)", ",".join(checks), cfg.host_root)

@@ -1,4 +1,4 @@
-# The Sentinel
+# sentinel
 
 Lightweight host security monitor in one process and one SQLite database:
 
@@ -6,17 +6,21 @@ Lightweight host security monitor in one process and one SQLite database:
 - **Detect** - unsupervised ML on your logs. Every anomaly explains *why* (`auth_failures high, z=+10.2, top IP 185.220.101.4`).
 - **One timeline** - audit findings and anomalies side by side, so "new port opened at 14:02" and "login failures spiked at 14:05" read as one story.
 
-Pure standard library for auditing; scikit-learn only for the ML half (`pip install "sentinel-monitor[ml]"`).
+- **API + dashboard** - `sentinel serve` exposes everything over HTTP and a small web UI (no JS framework, no CDN, works offline).
+
+Pure standard library for auditing; scikit-learn only for the ML half (`[ml]`), Starlette + uvicorn only for the web half (`[web]`):
+`pip install "sentinel-monitor[ml,web]"`.
 **Use only on systems you own or are authorized to assess.** Status: early alpha (0.1.0).
 
 ## Quick start (no root, no real logs needed)
     python3 -m venv .venv && . .venv/bin/activate
-    pip install -e ".[ml]"
+    pip install -e ".[ml,web]"
     sentinel audit                                   # posture audit of this machine (run with sudo for the full picture)
     sentinel demo --out-dir demo                     # synthetic logs: brute force, log silence, reverse shell, crash loop
     sentinel train  --file demo/normal.log
     sentinel detect --file demo/attack.log --lookback 30
     sentinel timeline --hours 48                     # audit findings + anomalies together
+    sentinel serve                                   # dashboard + API on http://127.0.0.1:8080
 
 ## Commands
 | Command | What it does |
@@ -25,21 +29,52 @@ Pure standard library for auditing; scikit-learn only for the ML half (`pip inst
 | `train` / `detect` | Learn normal / find anomalies. Source: `--file` (log files) or `--audit-history` (past audits, one window per run) |
 | `daemon` | Audits every N hours + detection every N minutes, forever (`--once` for a single pass). Trains itself if no model exists yet |
 | `timeline` | Everything on one time axis (`--hours`, `--min-severity`) |
+| `serve` | HTTP API + web dashboard (`--host`, `--port`, `--with-daemon` to also run the audit/detect loop in the same process) |
 | `history`, `show ID [--logs]`, `diff A B` | Browse runs, see run logs, new/resolved findings between two runs |
 | `config`, `demo` | Print effective settings / write demo logs |
 
 Use a separate `--model` file per source: a model trained on log files cannot score audit history (and vice versa).
 
+## Dashboard and API
+`sentinel serve` listens on `127.0.0.1:8080`. Tabs: **Overview** (latest audit, anomalies in 24h, 48h activity chart, top findings),
+**Timeline** (audit + anomalies on one axis), **Runs** (findings, logs, diff against the previous run), **Actions** (run audit / detection / training).
+
+Security defaults:
+- Loopback only. Listening on anything else is refused unless `SENTINEL_API_TOKEN` (or `[api] token`) is set (`--allow-open` overrides, for a port mapping / reverse proxy you trust).
+- With a token, every `/api/*` call needs `Authorization: Bearer <token>` (the dashboard asks for it and keeps it in the tab's sessionStorage).
+- **POST actions exist only when a token is set** (and `[api] actions = true`). Without a token the API is strictly read-only.
+- Without a token the `Host` header is checked (DNS-rebinding protection); a strict CSP forbids inline scripts and the UI renders log text with `textContent` only.
+- No TLS built in: put it behind a reverse proxy (Caddy, nginx) if it leaves the machine.
+
+| Endpoint | |
+|---|---|
+| `GET /api/health`, `/api/info` | liveness; version / auth / actions flags (no token needed) |
+| `GET /api/summary` | latest audit + counts, latest detection, anomalies in 24h |
+| `GET /api/runs?kind=&limit=` | list runs |
+| `GET /api/runs/{id}`, `/api/runs/{id}/logs` | findings (worst first) / stored log lines |
+| `GET /api/diff?old=&new=` | new and resolved findings between two runs |
+| `GET /api/timeline?hours=&min_severity=&limit=` | audit findings + anomalies on one time axis |
+| `GET /api/config` | effective settings (token masked) |
+| `POST /api/actions/audit` `{"checks": [...]}` | run an audit now |
+| `POST /api/actions/detect` `{"lookback_hours": 24, "audit_history": false}` | run detection now (409 if another run is active) |
+| `POST /api/actions/train` | retrain from the configured log files |
+
+    export SENTINEL_API_TOKEN=$(openssl rand -hex 24)
+    sentinel serve --with-daemon          # one process: audits + detection + dashboard
+    curl -H "Authorization: Bearer $SENTINEL_API_TOKEN" localhost:8080/api/summary
+
 ## Configuration
 `sentinel.toml` (see `sentinel.example.toml`), looked up via `--config`, `$SENTINEL_CONFIG`, `./sentinel.toml`, `/etc/sentinel/sentinel.toml`.
-Precedence: defaults < file < environment (`SENTINEL_DB`, `SENTINEL_MODEL`, `SENTINEL_HOST_ROOT`) < CLI flags. Typos in the file are errors, not silently ignored.
+Precedence: defaults < file < environment (`SENTINEL_DB`, `SENTINEL_MODEL`, `SENTINEL_HOST_ROOT`, `SENTINEL_API_TOKEN`) < CLI flags. Typos in the file are errors, not silently ignored.
 
 ## Docker
     # edit docker/sentinel.toml first (allowed ports, log path)
     docker compose up -d --build
     docker compose logs -f sentinel
     docker compose run --rm sentinel timeline
-The container is root, with the host mounted read-only at `/host`, host network and PID namespace. Nothing on the host is modified.
+    # dashboard: http://127.0.0.1:8080  (the `web` service, read-only view of the shared database)
+The `sentinel` service is root, with the host mounted read-only at `/host`, host network and PID namespace. Nothing on the host is modified.
+The `web` service has no host access, publishes only on 127.0.0.1 and has no token, so it is read-only; to expose it, add a reverse proxy and `SENTINEL_API_TOKEN`.
 (The image and compose file are untested in CI so far - see Status.)
 
 ## How it works
@@ -48,8 +83,10 @@ The container is root, with the host mounted read-only at `/host`, host network 
         v                                  v  IsolationForest + never-seen-pattern detector
     runs + findings(source=audit)   runs + findings(source=anomaly)        <- same SQLite DB
                       \\                   /
-                       `-- timeline / diff / history / (API + dashboard: next)`
+                       `-- timeline / diff / history / API + dashboard (sentinel serve)`
 
+- Two detectors share the window features: an IsolationForest, plus a z-score gate (a single feature >= 7 sigma from normal is
+  always reported - IsolationForest scores saturate, which used to hide long log silences).
 - Log lines are masked into *templates* (IPs, users, numbers removed). Windows (default 5 min, empty ones kept) get features:
   event count, idle streak, error ratio, auth failures, distinct IPs, top-IP share, entropy, time of day, top-25 template counts.
 - Severity is graded by the strongest deviation (z-score); never-seen patterns are raised higher if they look like auth failures or
@@ -75,6 +112,7 @@ Then add `"mycheck"` to `[audit] checks`. Use `cfg.path("/etc/x")` so it works o
 - Tested on Debian/Ubuntu-style systems only. Not a replacement for a full SIEM/EDR.
 
 ## Roadmap
-API + dashboard -> multi-host agents and alerts (Slack/mail/webhook) -> CVE matching (OSV), SUID inventory, container audits, journald/JSON logs.
+multi-host agents and alerts (Slack/mail/webhook) -> CVE matching (OSV), SUID inventory, container audits, journald/JSON logs.
 
-
+## Migrating from the earlier `secaudit` / `logsentinel` prototypes
+Not automatic: the new database has a different schema. Start fresh with `sentinel audit` (old files can stay as an archive).

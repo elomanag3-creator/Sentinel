@@ -14,6 +14,8 @@ MAP = {  # (toml section, key) -> Settings attribute
     ("detect", "contamination"): "contamination", ("detect", "model"): "model",
     ("detect", "interval"): "detect_interval", ("detect", "lookback_hours"): "lookback_hours",
     ("detect", "novelty"): "novelty",
+    ("api", "host"): "api_host", ("api", "port"): "api_port",
+    ("api", "token"): "api_token", ("api", "actions"): "api_actions",
 }
 
 
@@ -36,6 +38,10 @@ class Settings:
     detect_interval: int = 300
     lookback_hours: float = 24
     novelty: bool = True
+    api_host: str = "127.0.0.1"      # loopback by default; anything else requires a token
+    api_port: int = 8080
+    api_token: str = ""              # empty = no auth (loopback only) and no POST actions
+    api_actions: bool = True         # allow POST /api/actions/* (only effective when a token is set)
 
     def audit_config(self) -> Config:
         return Config(self.host_root, {int(p) for p in self.allow_ports}, self.refresh_index)
@@ -53,7 +59,8 @@ def load_settings(path: str = None) -> Settings:
             if os.path.exists(cand):
                 _apply_toml(s, cand)
                 break
-    for env, attr in (("SENTINEL_DB", "db"), ("SENTINEL_MODEL", "model"), ("SENTINEL_HOST_ROOT", "host_root")):
+    for env, attr in (("SENTINEL_DB", "db"), ("SENTINEL_MODEL", "model"), ("SENTINEL_HOST_ROOT", "host_root"),
+                      ("SENTINEL_API_TOKEN", "api_token")):
         if os.environ.get(env):
             setattr(s, attr, os.environ[env])
     return s
@@ -81,4 +88,7 @@ def _apply_toml(s: Settings, path: str) -> None:
 
 
 def describe(s: Settings) -> str:
-    return "\n".join(f"{f.name} = {getattr(s, f.name)!r}" for f in fields(s))
+    def show(f):
+        v = getattr(s, f.name)
+        return "<set>" if f.name == "api_token" and v else v   # never print the secret
+    return "\n".join(f"{f.name} = {show(f)!r}" for f in fields(s))

@@ -17,5 +17,19 @@ services:
       SENTINEL_HOST_ROOT: /host
     # command: ["daemon"]       # default. One-off commands: docker compose run --rm sentinel audit
 
+  web:                          # dashboard + API, read-only view of the same database (no host mount, no token = no actions)
+    build: .
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    ports: ["127.0.0.1:8080:8080"]     # loopback only; put a reverse proxy + SENTINEL_API_TOKEN in front to expose it
+    volumes:
+      - sentinel-data:/data
+      - ./docker/sentinel.toml:/etc/sentinel/sentinel.toml:ro
+    command: ["serve", "--host", "0.0.0.0", "--allow-open"]
+    depends_on: [sentinel]
+
 volumes:
   sentinel-data:

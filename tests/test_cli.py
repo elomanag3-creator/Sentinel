@@ -1,4 +1,8 @@
-import contextlib, io, os, tempfile, unittest
+import contextlib
+import io
+import os
+import tempfile
+import unittest
 
 from helpers import bad_root
 from sentinel.cli import main
@@ -15,7 +19,8 @@ class CliTests(unittest.TestCase):
     def test_full_workflow(self):
         with tempfile.TemporaryDirectory() as d:
             db, model, fake = os.path.join(d, "s.db"), os.path.join(d, "m.npz"), os.path.join(d, "root")
-            os.makedirs(fake); bad_root(fake)
+            os.makedirs(fake)
+            bad_root(fake)
             base = ["--db", db]
 
             code, out, _ = run(*base, "audit", "--checks", "passwords", "--host-root", fake, "--fail-on", "high")
@@ -40,7 +45,8 @@ class CliTests(unittest.TestCase):
     def test_daemon_once(self):
         with tempfile.TemporaryDirectory() as d:
             fake = os.path.join(d, "root")
-            os.makedirs(fake); bad_root(fake)
+            os.makedirs(fake)
+            bad_root(fake)
             cfg = os.path.join(d, "c.toml")
             with open(cfg, "w") as fh:
                 fh.write(f'[general]\ndb="{d}/d.db"\nhost_root="{fake}"\n[audit]\nchecks=["passwords"]\n')

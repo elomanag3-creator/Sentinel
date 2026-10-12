@@ -48,7 +48,8 @@ def _generate(start, hours, seed, incidents):
         for a, b, kind in incidents:
             if not a <= minute < b:
                 continue
-            sec = lambda: ts + timedelta(seconds=rng.randint(0, 59))
+            def sec(ts=ts):
+                return ts + timedelta(seconds=rng.randint(0, 59))
             if kind == "bruteforce":
                 for _ in range(45):
                     lines.append(_fmt(sec(), "sshd", f"Failed password for {rng.choice(['root', 'admin', 'ubuntu', 'git'])} from 185.220.101.4 port {rng.randint(1024, 65000)} ssh2", rng.randint(1000, 30000)))
@@ -68,7 +69,8 @@ def write_demo(out_dir: str, now: datetime = None):
     normal_start = now - timedelta(days=5)
     attack_start = now - timedelta(days=1)
     start_min = attack_start.hour * 60 + attack_start.minute
-    at = lambda hh: (hh * 60 - start_min) % 1440          # minute offset of a wall-clock hour
+    def at(hh):                                            # minute offset of a wall-clock hour
+        return (hh * 60 - start_min) % 1440
     incidents = [(at(14), at(14) + 15, "bruteforce"), (at(10), at(10) + 40, "silence"),
                  (at(3), at(3) + 20, "crashloop")]
     with open(os.path.join(out_dir, "normal.log"), "w") as fh:

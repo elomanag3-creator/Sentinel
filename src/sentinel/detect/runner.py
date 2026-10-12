@@ -3,7 +3,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-from ..db import Database, capture_logs
+from ..db import RUN_LOCK, Database, capture_logs
 from ..models import Finding
 from .features import EPOCH
 from .model import Anomaly, Detector
@@ -63,11 +63,12 @@ def detect(settings, db, det: Detector, files=None, audit_history=False, lookbac
         seen.update((a.kind, a.start, a.detail) for a in anomalies)
         if not anomalies:
             return None, [], nwin, len(events)
-    run_id = db.start_run("detect", events[0].host if events else "", desc, ["anomaly"])
-    with capture_logs(db, run_id):
-        log.info("analysed %d events in %d windows (%s)", len(events), nwin, desc)
-        for a in anomalies:
-            db.add_finding(run_id, to_finding(a))
-        log.info("%d anomalies recorded", len(anomalies))
-    db.finish_run(run_id)
+    with RUN_LOCK:
+        run_id = db.start_run("detect", events[0].host if events else "", desc, ["anomaly"])
+        with capture_logs(db, run_id):
+            log.info("analysed %d events in %d windows (%s)", len(events), nwin, desc)
+            for a in anomalies:
+                db.add_finding(run_id, to_finding(a))
+            log.info("%d anomalies recorded", len(anomalies))
+        db.finish_run(run_id)
     return run_id, anomalies, nwin, len(events)

@@ -12,5 +12,9 @@ vulnerability") or e-mail `TODO-add-security-contact@example.org`. Expect an ack
 - Model files are NumPy arrays + JSON and are loaded with `allow_pickle=False` - no pickle, no code execution from a model file.
 - The database may contain sensitive details (usernames, IPs, hashes' *types* - never hashes themselves). Protect it like a log.
 
+- `sentinel serve` is loopback-only and unauthenticated-read-only by default; a non-loopback bind requires `SENTINEL_API_TOKEN`.
+  POST actions (run audit/detect/train) exist only when a token is set. There is no TLS or rate limiting built in - use a reverse proxy.
+- The dashboard renders log text with `textContent` and ships a strict Content-Security-Policy (no inline scripts, no external origins).
+
 ## Authorized use only
 Run sentinel only on systems you own or are explicitly authorized to assess.

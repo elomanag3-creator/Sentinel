@@ -20,6 +20,7 @@ FORMAT = 1
 SUSPICIOUS = re.compile(r"(?i)\bnc(at)? .*-e\b|/dev/tcp/|\bbase64 -d|chmod [0-7]*7[0-7]*7 |(curl|wget) [^|;]*\|\s*(ba)?sh|"
                         r"Accepted password for root|authorized_keys|useradd|/etc/shadow")
 MIN_WINDOWS = {"time": 50, "group": 10}
+STRONG_Z = 7.0     # a single feature this far from normal is reported even if the forest score saturates (log silence)
 
 
 @dataclass
@@ -75,15 +76,22 @@ class Detector:
             return [], 0
         Z = self.scaler.transform(matrix(wins, self.vocab))
         scores = -self.iso.score_samples(Z)
-        out = [self._window_anomaly(w, float(s), z) for w, s, z in zip(wins, scores, Z) if s > self.threshold]
+        out = [self._window_anomaly(w, float(s), z) for w, s, z in zip(wins, scores, Z)
+               if s > self.threshold or self._zmax(z) >= STRONG_Z]
         if novelty:
             out += self._novel(events, max_novel)
         out.sort(key=lambda a: a.start)
         return out, len(wins)
 
+    def _zabs(self, z) -> np.ndarray:
+        return np.array([0.0 if n.startswith("hour_") else abs(v) for n, v in zip(self.names, z)])
+
+    def _zmax(self, z) -> float:
+        return float(self._zabs(z).max())
+
     def _window_anomaly(self, w, score, z) -> Anomaly:
         reasons = []
-        zz = np.array([0.0 if n.startswith("hour_") else abs(v) for n, v in zip(self.names, z)])
+        zz = self._zabs(z)
         for i in np.argsort(-zz)[:3]:
             if zz[i] < 2.5:
                 continue

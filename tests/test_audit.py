@@ -1,4 +1,5 @@
-import tempfile, unittest
+import tempfile
+import unittest
 
 from helpers import bad_root, write
 from sentinel.audit import passwords, permissions, ports
@@ -47,7 +48,7 @@ class RunnerTests(unittest.TestCase):
                 self.assertEqual((run["kind"], run["max_severity"]), ("audit", "critical"))
                 titles = [f["title"] for f in db.get_findings(run_id)]
                 self.assertIn("Check 'boom' failed", titles)           # crash became a finding, run completed
-                msgs = [l["message"] for l in db.get_logs(run_id)]
+                msgs = [row["message"] for row in db.get_logs(run_id)]
                 self.assertIn("audit finished", msgs)
                 with self.assertRaisesRegex(ValueError, "unknown check"):
                     run_audit(db, Settings(host_root=r), ["nope"])

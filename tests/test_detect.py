@@ -1,4 +1,6 @@
-import os, tempfile, unittest
+import os
+import tempfile
+import unittest
 from datetime import datetime
 
 import numpy as np

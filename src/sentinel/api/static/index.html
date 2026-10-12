@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sentinel</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot" id="dot" title="connection"></span><b>sentinel</b><span id="host" class="muted"></span></div>
+  <nav id="tabs" role="tablist">
+    <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button role="tab" data-tab="timeline" aria-selected="false">Timeline</button>
+    <button role="tab" data-tab="runs" aria-selected="false">Runs</button>
+    <button role="tab" data-tab="actions" aria-selected="false" id="tab-actions" hidden>Actions</button>
+  </nav>
+  <div class="right"><span id="updated" class="muted"></span><button id="refresh" class="ghost" title="Refresh">&#8635;</button></div>
+</header>
+
+<main>
+  <div id="login" class="card" hidden>
+    <h2>Token required</h2>
+    <p class="muted">This server needs an API token. It is kept in this browser tab only.</p>
+    <form id="login-form"><input id="token" type="password" autocomplete="off" placeholder="API token" aria-label="API token"><button>Sign in</button></form>
+    <p id="login-err" class="err"></p>
+  </div>
+
+  <section id="view-overview" class="view">
+    <h3>Latest audit <span id="audit-when" class="muted"></span></h3>
+    <div id="audit-tiles" class="tiles"></div>
+    <h3>Anomalies, last 24h <span id="detect-when" class="muted"></span></h3>
+    <div id="anom-tiles" class="tiles"></div>
+    <h3>Activity, last 48h</h3>
+    <div class="card"><div id="chart"></div><div id="legend" class="legend"></div></div>
+    <h3>Top open findings</h3>
+    <div id="top-findings" class="list"></div>
+  </section>
+
+  <section id="view-timeline" class="view" hidden>
+    <div class="controls">
+      <label>Window <select id="tl-hours"><option value="6">6 h</option><option value="24" selected>24 h</option><option value="72">3 days</option><option value="168">7 days</option><option value="720">30 days</option></select></label>
+      <label>Min severity <select id="tl-sev"></select></label>
+      <span id="tl-count" class="muted"></span>
+    </div>
+    <div id="timeline" class="list"></div>
+  </section>
+
+  <section id="view-runs" class="view" hidden>
+    <div class="controls">
+      <label>Kind <select id="runs-kind"><option value="">all</option><option value="audit">audit</option><option value="detect">detect</option></select></label>
+    </div>
+    <div class="split">
+      <div id="runs" class="list"></div>
+      <div id="run-detail" class="card" hidden></div>
+    </div>
+  </section>
+
+  <section id="view-actions" class="view" hidden>
+    <div class="card">
+      <h2>Run now</h2>
+      <p class="muted">Runs on the host this server is running on. One run at a time.</p>
+      <div class="controls">
+        <button data-action="audit">Run audit</button>
+        <button data-action="detect">Run detection</button>
+        <button data-action="train" class="ghost">Train model</button>
+      </div>
+      <pre id="action-out" class="out" hidden></pre>
+    </div>
+  </section>
+
+  <p id="error" class="err" role="alert"></p>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

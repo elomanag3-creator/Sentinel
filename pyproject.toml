@@ -20,7 +20,9 @@ classifiers = [
 
 [project.optional-dependencies]
 ml = ["numpy>=1.26", "scikit-learn>=1.4"]   # needed for train / detect and the detection part of the daemon
-dev = ["ruff"]
+web = ["starlette>=0.37", "uvicorn>=0.30"]  # `sentinel serve`: HTTP API + dashboard
+dev = ["ruff", "httpx"]
+all = ["sentinel-monitor[ml,web]"]
 
 [project.scripts]
 sentinel = "sentinel.cli:main"
@@ -28,5 +30,11 @@ sentinel = "sentinel.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"sentinel.api" = ["static/*"]
+
 [tool.ruff]
 line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]   # pinned: new ruff releases enable many more rules by default

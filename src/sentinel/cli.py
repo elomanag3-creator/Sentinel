@@ -98,6 +98,32 @@ def cmd_daemon(a, s, db):
     run_daemon(s, once=a.once)
 
 
+LOOPBACK = ("127.0.0.1", "localhost", "::1")
+
+
+def cmd_serve(a, s, db):
+    try:
+        import uvicorn
+        from .api.app import create_app
+    except ImportError as exc:
+        raise SystemExit(f"this command needs the web extras: pip install 'sentinel-monitor[web]'  ({exc})")
+    db.close()
+    s.api_host, s.api_port = a.host or s.api_host, a.port or s.api_port
+    loopback = s.api_host in LOOPBACK
+    if not loopback and not s.api_token and not a.allow_open:
+        raise ValueError(f"refusing to listen on {s.api_host} without authentication: set SENTINEL_API_TOKEN "
+                         "(or [api] token), or pass --allow-open if something else (reverse proxy, port mapping) protects it")
+    # Host-header allow-list (DNS-rebinding defence) whenever there is no token to protect the API.
+    hosts = None if (s.api_token and not loopback) else list(LOOPBACK) + ["[::1]"] + (a.allowed_host or [])
+    if a.with_daemon:
+        import threading
+        from .daemon import run_daemon
+        threading.Thread(target=run_daemon, args=(s,), daemon=True, name="sentinel-daemon").start()
+    mode = "token required" if s.api_token else "NO AUTH (read-only)"
+    print(f"sentinel dashboard on http://{s.api_host}:{s.api_port}  [{mode}]", file=sys.stderr)
+    uvicorn.run(create_app(s, hosts), host=s.api_host, port=s.api_port, log_level="warning")
+
+
 def cmd_history(a, s, db):
     for r in db.list_runs(a.limit, a.kind):
         print(f"#{r['id']:<4} {r['kind']:7} {r['started_at']}  {(r['hostname'] or ''):18} findings={r['total']:<4} worst={r['max_severity']}")
@@ -164,6 +190,12 @@ def build_parser():
 
     dm = sub.add_parser("daemon", help="run audits + detection continuously")
     dm.add_argument("--once", action="store_true", help="run each job once and exit")
+    sv = sub.add_parser("serve", help="HTTP API + web dashboard (token via $SENTINEL_API_TOKEN or [api] token)")
+    sv.add_argument("--host", help="bind address (default 127.0.0.1; anything else requires a token)")
+    sv.add_argument("--port", type=int)
+    sv.add_argument("--with-daemon", action="store_true", help="also run the audit/detect loop in this process")
+    sv.add_argument("--allowed-host", action="append", help="extra Host header to accept without a token (repeatable)")
+    sv.add_argument("--allow-open", action="store_true", help="allow a non-loopback bind without a token")
     h = sub.add_parser("history", help="list runs")
     h.add_argument("--limit", type=int, default=10)
     h.add_argument("--kind", choices=["audit", "detect"])
@@ -184,15 +216,17 @@ def build_parser():
     return p
 
 
-COMMANDS = {"audit": cmd_audit, "train": cmd_train, "detect": cmd_detect, "daemon": cmd_daemon, "history": cmd_history,
+COMMANDS = {"serve": cmd_serve, "audit": cmd_audit, "train": cmd_train, "detect": cmd_detect, "daemon": cmd_daemon, "history": cmd_history,
             "show": cmd_show, "diff": cmd_diff, "timeline": cmd_timeline, "demo": cmd_demo}
 
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
-    daemon = args.cmd == "daemon"
+    daemon = args.cmd in ("daemon", "serve")
     logging.basicConfig(level=logging.INFO if daemon else logging.WARNING,
                         format="%(asctime)s %(levelname)s %(message)s" if daemon else "%(levelname)s %(message)s")
+    for handler in logging.getLogger().handlers:   # run logs go to the database; keep one-shot commands quiet
+        handler.setLevel(logging.INFO if daemon else logging.WARNING)
     try:
         settings = load_settings(args.config)
     except ConfigError as exc:

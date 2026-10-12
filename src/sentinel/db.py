@@ -1,6 +1,7 @@
 """One SQLite database for everything: audit runs, detection runs, findings (audit + anomaly) and logs."""
 import logging
 import os
+import threading
 from contextlib import contextmanager
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -47,6 +48,11 @@ MIGRATIONS = [  # append new migrations; never edit old ones. Version is stored 
     CREATE INDEX idx_logs_run      ON logs(run_id);
     """,
 ]
+
+
+# Held while an audit/detection run is being recorded: capture_logs() attaches to the global `sentinel` logger,
+# so two runs in one process (daemon thread + API action) must not overlap or their logs would mix.
+RUN_LOCK = threading.RLock()
 
 
 def now_iso() -> str:
@@ -136,6 +142,16 @@ class Database:
             f"SELECT f.*, COALESCE(f.window_start, f.created_at) AS ts, r.hostname FROM findings f "
             f"JOIN runs r ON r.id=f.run_id WHERE COALESCE(f.window_start, f.created_at) >= ? "
             f"AND f.severity IN ({marks}) ORDER BY ts DESC, f.id DESC LIMIT ?", [since, *ok, limit]).fetchall()
+
+    def severity_counts(self, run_id: int) -> dict:
+        return {r["severity"]: r["n"] for r in self.conn.execute(
+            "SELECT severity, COUNT(*) AS n FROM findings WHERE run_id=? GROUP BY severity", (run_id,))}
+
+    def anomaly_counts(self, hours: float = 24) -> dict:
+        since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat(timespec="seconds")
+        return {r["severity"]: r["n"] for r in self.conn.execute(
+            "SELECT severity, COUNT(*) AS n FROM findings WHERE source='anomaly' "
+            "AND COALESCE(window_start, created_at) >= ? GROUP BY severity", (since,))}
 
     def close(self):
         self.conn.close()
