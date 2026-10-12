@@ -1,6 +1,6 @@
 # The Sentinel
 
-Lightweight host security monitor in one process and one SQLite database:
+**Lightweight host security monitor in one process and one SQLite database:**
 
 ![Dashboard example](shot-overview.png)
 
