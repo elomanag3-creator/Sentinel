@@ -22,6 +22,43 @@ Pure standard library for auditing; scikit-learn only for the ML half (`[ml]`), 
     sentinel timeline --hours 48                     # audit findings + anomalies together
     sentinel serve                                   # dashboard + API on http://127.0.0.1:8080
 
+## Using your real logs
+Sentinel reads **plain-text logs, one event per line**, in either of two formats (anything else is silently skipped):
+
+    Oct 12 10:27:01 web01 sshd[123]: Failed password for root from 1.2.3.4 port 22 ssh2     # classic syslog
+    2026-10-12T10:27:01+00:00 web01 sshd[123]: Failed password for root from 1.2.3.4 ...   # ISO 8601 (also "2026-10-12 10:27:01")
+
+i.e. `<timestamp> <host> <process>[pid]: <message>`. That covers `/var/log/auth.log` (Debian/Ubuntu), `/var/log/secure` (RHEL/Fedora),
+`/var/log/syslog`, `/var/log/messages` and anything rsyslog writes. Not supported yet: the Windows Event Log (`.evtx`), journald binary
+journals (export first: `journalctl --no-pager -o short-iso > journal.log`), JSON logs.
+
+    # 1. learn "normal" from a CLEAN period - several days minimum, a week or more is better (needs >= ~4 h of events)
+    sentinel train  --file /var/log/auth.log --file /var/log/auth.log.1        # rotated logs: gunzip them first
+    # 2. look for anomalies in the recent past
+    sentinel detect --file /var/log/auth.log --lookback 24                      # last 24 hours
+    sentinel timeline --hours 48
+
+    # 3. or make it permanent: sentinel.toml  ->  [detect] files = ["/var/log/auth.log"]
+    sentinel daemon                      # trains itself on first start if no model exists, then checks every 5 minutes
+    sentinel serve --with-daemon         # same, plus the dashboard
+
+Tips: reading `/var/log/auth.log` needs root or membership of the `adm` group. Train on logs that contain no incident, or the incident becomes "normal".
+Re-train after big changes (new service, new users). Expect some low-severity noise at first; raise `contamination` or filter with `--min-severity`.
+Timestamps without a timezone are read as the host's local wall-clock time.
+
+### Windows
+- **Dashboard, API, log detection and the demo work natively on Windows** (`py -m venv .venv`, `.venv\Scripts\activate.bat` in cmd or `.venv\Scripts\Activate.ps1` in PowerShell, then `pip install -e ".[ml,web]"`).
+  Use `.venv\Scripts\sentinel ...` if you skip activation. Typing a `.ps1` path in `cmd` opens Notepad: use PowerShell or the `.bat` script.
+- **`sentinel audit` and the audit tests need Linux** (`/proc`, `/etc/shadow`, POSIX permissions, apt/dnf/apk). On Windows use WSL2 or a Linux VM/server.
+- **Windows logs:** `scripts/win2log.ps1` (run as Administrator) exports logons (4624/4625), privileges (4672), account/group changes (4720/4732),
+  new services (7045) and unexpected shutdowns (6008) into the format above. *Experimental - not yet tested on a real Windows host.*
+
+        .\scripts\win2log.ps1 -Days 14 -Out windows.log
+        .venv\Scripts\sentinel train  --file windows.log --model windows.npz
+        .venv\Scripts\sentinel detect --file windows.log --model windows.npz --lookback 24
+
+  In `sentinel.toml` write Windows paths as TOML literal strings: `files = ['C:\logs\windows.log']`.
+
 ## Commands
 | Command | What it does |
 |---|---|
@@ -107,8 +144,8 @@ Then add `"mycheck"` to `[audit] checks`. Use `cfg.path("/etc/x")` so it works o
 
 ## Limits (honest notes)
 - Unsupervised ML finds *unusual*, not *malicious*; expect some low-severity noise and tune `contamination`. Train on a clean period.
-- Linux only. TCP only (no UDP yet). Package checks: apt, apk, dnf; no CVE matching yet.
-- Syslog lines carry no year/timezone: current year and host-local wall clock are assumed.
+- Audit is Linux only (log detection also runs on Windows/macOS). TCP only (no UDP yet). Package checks: apt, apk, dnf; no CVE matching yet.
+- Syslog lines carry no year/timezone: current year and host-local wall clock are assumed. Log formats: see *Using your real logs*.
 - Tested on Debian/Ubuntu-style systems only. Not a replacement for a full SIEM/EDR.
 
 ## Roadmap

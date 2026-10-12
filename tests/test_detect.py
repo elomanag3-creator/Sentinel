@@ -23,6 +23,17 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(parse_line("2026-10-09T06:41:12.1+00:00 h cron[9]: ok", None).ts.hour, 6)
         self.assertIsNone(parse_line("garbage", None))
 
+    def test_windows_export_format(self):
+        """Lines produced by scripts/win2log.ps1 must parse, and failed logons must count as auth failures."""
+        from sentinel.detect.features import AUTH_FAIL
+        bad = parse_line("2026-10-12T10:27:01 PC01 winlogon: Failed password for bob from 10.1.2.3 logontype 3 "
+                         "(authentication failure)", None)
+        self.assertEqual((bad.host, bad.proc, bad.level, bad.ips), ("PC01", "winlogon", "ERROR", ("10.1.2.3",)))
+        self.assertTrue(AUTH_FAIL.search(bad.msg))
+        good = parse_line("2026-10-12T10:27:02 PC01 winlogon: Accepted logon for bob from - logontype 2", None)
+        self.assertEqual(good.level, "INFO")
+        self.assertIsNotNone(parse_line("2026-10-12T10:27:03 PC01 useradd: useradd: new account x created by y", None))
+
     def test_templates_collapse(self):
         self.assertEqual(templatize("sshd", "Failed password for root from 10.0.0.1 port 22 ssh2"),
                          templatize("sshd", "Failed password for alice from 8.8.8.8 port 2200 ssh2"))
